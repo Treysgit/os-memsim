@@ -1,13 +1,17 @@
 #include <iostream>
-#include <string>
+#include <cstdint>
 #include <cstring>
+#include <string>
 #include "mmu.h"
 #include "pagetable.h"
+
+// 64 MB (64 * 1024 * 1024)
+#define PHYSICAL_MEMORY 67108864
 
 void printStartMessage(int page_size);
 void createProcess(int text_size, int data_size, Mmu *mmu, PageTable *page_table);
 void allocateVariable(uint32_t pid, std::string var_name, DataType type, uint32_t num_elements, Mmu *mmu, PageTable *page_table);
-void setVariable(uint32_t pid, std::string var_name, uint32_t offset, void *value, Mmu *mmu, PageTable *page_table, void *memory);
+void setVariable(uint32_t pid, std::string var_name, uint32_t offset, void *value, Mmu *mmu, PageTable *page_table, uint8_t *memory);
 void freeVariable(uint32_t pid, std::string var_name, Mmu *mmu, PageTable *page_table);
 void terminateProcess(uint32_t pid, Mmu *mmu, PageTable *page_table);
 
@@ -16,7 +20,7 @@ int main(int argc, char **argv)
     // Ensure user specified page size as a command line parameter
     if (argc < 2)
     {
-        fprintf(stderr, "Error: you must specify the page size\n");
+        std::cerr << "Error: you must specify the page size" << std::endl;
         return 1;
     }
 
@@ -24,29 +28,29 @@ int main(int argc, char **argv)
     int page_size = std::stoi(argv[1]);
     printStartMessage(page_size);
 
-    // Create physical 'memory'
-    uint32_t mem_size = 67108864;
-    void *memory = malloc(mem_size); // 64 MB (64 * 1024 * 1024)
+    // Create physical 'memory' (raw array of bytes)
+    uint8_t *memory = new uint8_t[PHYSICAL_MEMORY];
 
     // Create MMU and Page Table
-    Mmu *mmu = new Mmu(mem_size);
+    Mmu *mmu = new Mmu(PHYSICAL_MEMORY);
     PageTable *page_table = new PageTable(page_size);
 
     // Prompt loop
     std::string command;
     std::cout << "> ";
-    std::getline (std::cin, command);
-    while (command != "exit") {
+    std::getline(std::cin, command);
+    while (command != "exit")
+    {
         // Handle command
         // TODO: implement this!
 
         // Get next command
         std::cout << "> ";
-        std::getline (std::cin, command);
+        std::getline(std::cin, command);
     }
 
     // Cean up
-    free(memory);
+    delete[] memory;
     delete mmu;
     delete page_table;
 
@@ -87,7 +91,7 @@ void allocateVariable(uint32_t pid, std::string var_name, DataType type, uint32_
     //   - print virtual memory address
 }
 
-void setVariable(uint32_t pid, std::string var_name, uint32_t offset, void *value, Mmu *mmu, PageTable *page_table, void *memory)
+void setVariable(uint32_t pid, std::string var_name, uint32_t offset, void *value, Mmu *mmu, PageTable *page_table, uint8_t *memory)
 {
     // TODO: implement this!
     //   - look up physical address for variable based on its virtual address / offset
