@@ -14,17 +14,18 @@ Mmu::~Mmu()
 
 uint32_t Mmu::createProcess()
 {
-    Process *proc = new Process();
-    proc->pid = _next_pid;
+    Process *proc = new Process(); // create heap process object
+    proc->pid = _next_pid; // assign current PID
 
-    Variable *var = new Variable();
-    var->name = "<FREE_SPACE>";
-    var->type = DataType::FreeSpace;
-    var->virtual_address = 0;
-    var->size = _max_size;
-    proc->variables.push_back(var);
+    // Initial variable -- just a reference of memory left in RAM
+    Variable *var = new Variable(); // create variable object
+    var->name = "<FREE_SPACE>"; 
+    var->type = DataType::FreeSpace; // label free space for future allocations
+    var->virtual_address = 0; // first VA is address 0
+    var->size = _max_size; // most memory the process can allocate
+    proc->variables.push_back(var); //attach to process
 
-    _processes.push_back(proc);
+    _processes.push_back(proc); // put new process in vector of processes
 
     _next_pid++;
     

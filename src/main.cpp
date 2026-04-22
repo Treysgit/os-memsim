@@ -5,6 +5,9 @@
 #include "mmu.h"
 #include "pagetable.h"
 
+// added
+#include <sstream>
+
 // 64 MB (64 * 1024 * 1024)
 #define PHYSICAL_MEMORY 67108864
 
@@ -29,20 +32,54 @@ int main(int argc, char **argv)
     printStartMessage(page_size);
 
     // Create physical 'memory' (raw array of bytes)
-    uint8_t *memory = new uint8_t[PHYSICAL_MEMORY];
+    uint8_t *memory = new uint8_t[PHYSICAL_MEMORY]; // 2^26 bytes
 
     // Create MMU and Page Table
-    Mmu *mmu = new Mmu(PHYSICAL_MEMORY);
+    Mmu *mmu = new Mmu(PHYSICAL_MEMORY); 
     PageTable *page_table = new PageTable(page_size);
 
     // Prompt loop
     std::string command;
     std::cout << "> ";
     std::getline(std::cin, command);
+    // command = <cmd> <text_size> <data_size>
+
+    std::string cmd;
+    int text_size;
+    int data_size;
+
+    std::isstringstream user_input(command); // <cmd> <text_size> <data_size>
+    user_input >> cmd >> text_size >> data_size;
+
     while (command != "exit")
     {
         // Handle command
         // TODO: implement this!
+        if(cmd == "create")
+        {
+            if(text_size < 2048 || text_size > 16384)
+            {
+                // print error
+            }
+            else if(data_size < 0 || data_size > 1024)
+            {
+                // print error
+            }
+            else
+            {
+                createProcess(text_size, data_size, mmu, page_table);
+            }
+        }
+        else if(cmd == "allocate")
+        {
+            //implement
+        }
+        // more else ifs
+        else
+        {
+            // command not recognized
+        }
+
 
         // Get next command
         std::cout << "> ";
@@ -80,6 +117,73 @@ void createProcess(int text_size, int data_size, Mmu *mmu, PageTable *page_table
     //   - create new process in the MMU
     //   - allocate new variables for the <TEXT>, <GLOBALS>, and <STACK>
     //   - print pid
+
+    uint32_t pid = mmu->createProcess(); //allocate virtual address space, and get unique pid 
+
+    // get created process object
+    Process *process = NULL;
+    for(int i = 0 ; i < mmu->_processes() ; i++)
+    {
+        if(mmu->_processes[i]->pid == 0)
+        {
+            process = mmu->_processes[i];
+            break;
+        }
+    }
+
+    uint32_t  stack_size = 65536;
+    uint32_t full_alloc = text_size + data_size + stack_size;
+
+    //get virtual addresses 
+    uint32_t text_va = 0;
+    uint32_t globals_va = text_va + text_size;
+    uint32_t stack_va = global_va + data_size;
+
+    // assign virtual addresses to each variable
+    mmu->addVariableToProcess(pid, "<TEXT>", DataType::int, text_size, text_va);
+    mmu->addVariableToProcess(process, "<GLOBALS>", DataType::int, date_size, data_va);
+    mmu->addVariableToProcess(process, "<STACK>", DataType::int, date_size, stack_va);
+
+
+
+    int page_size = page_table->getPageSize();
+    int total_pages = (full_alloc + page_size - 1) / page_size; // get total pages for process, round up division
+
+    // loop addEntry() to allocate needed pages for process
+    for(int page_index = 0 ; page_index < total_pages ; page_index++)
+    {
+        page_table->addEntry(pid, page_number);
+    }
+
+    // get created process object
+    Process *process = NULL;
+    for(int i = 0 ; i < mmu->_processes.size() ; i++)
+    {
+        if(mmu->_processes[i]->pid == pid && mmu->_processes[i] != NULL)
+        {
+            process = mmu->_processes[i];
+            break;
+        }
+    }
+    //update free space for future virtual addresses
+    if(process != NULL)
+    {
+        // find variable given to process for free space
+        for(int i = 0 ; i < process->variables.size() ; i++)
+        {
+            if(process->variables[i]->type == DataType::FreeSpace)
+            {
+                //change start index of free space to the end of full allocation. 
+                // Free space left is total RAM - full allocation
+                process->variables[i]->virtual_address = full_alloc;
+                process->variables[i]->size = mmu->_max_size - full_alloc;
+                break;
+            }
+        }
+    }
+
+    std::cout << pid << std::endl;
+
 }
 
 void allocateVariable(uint32_t pid, std::string var_name, DataType type, uint32_t num_elements, Mmu *mmu, PageTable *page_table)
@@ -89,6 +193,88 @@ void allocateVariable(uint32_t pid, std::string var_name, DataType type, uint32_
     //   - if no hole is large enough, allocate new page(s)
     //   - insert variable into MMU
     //   - print virtual memory address
+
+    // find process object in vector
+    Process *process = NULL;
+    for(int i = 0 ; i < mmu->_processes.size() ; i++)
+    {
+        if(mmu->_processes[i]->pid == pid && mmu->_processes[i] != NULL)
+        {
+            process = mmu->_processes[i];
+            break;
+        }
+    }
+
+    //return if not found
+    if(process == NULL)
+    {
+        return;
+    }
+
+    //get size of allocation
+    uint32_t type_size = 0;
+    if(type == DataType::Char)
+    {
+        type_size = 1;
+    }
+    else if(type == DataType::Short)
+    {
+        type_size = 2;
+    }
+    else if(type == DataType::Int || type == DataType::Float)
+    {
+        type_size = 4;
+    }
+    else if(type == DataType::Long || type == DataType::Double)
+    {
+        type_size = 8;
+    }
+
+    //calculate the type of variable by its quantity
+    uint32_t var_alloc = type_size * num_elements;
+    uint32_t new_addr = 0; //initial address
+    int hole_found = 0;
+
+    //first-fit (see if any deallocated spaces are big enough)
+    for(int i = 0 ; process->variables.size() ; i++)
+    {
+        if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->size >= var_alloc){
+            new_addr = process->variables[i]->virtual_address; // assign address of free space
+            mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
+            process->variables[i]->virtual_address += var_alloc; //move free space virtual address forward
+            process->variables[i]->size -= var_alloc; // decrease size of free space
+
+            hole_found = 1;
+            break;
+
+        }
+    }
+
+    //allocate new pages if hole not found
+    if(!hole_found){
+        for(int i = 0 ; i < process->variables.size() ; i++ )
+        //find furthest virtual address given to a variable 
+        {
+            if(process.variables[i] != DataType::FreeSpace)
+            {
+                new_addr = process->variables[i]->virtual_address;
+            }
+        }
+
+    
+    }
+    //allocate enough new pages for new variable allocation
+    
+
+    mmu->addVariableToProcess(process, "<VAR>", DataType::type, var_alloc, new_addr);
+    
+
+
+
+
+
+
+
 }
 
 void setVariable(uint32_t pid, std::string var_name, uint32_t offset, void *value, Mmu *mmu, PageTable *page_table, uint8_t *memory)
