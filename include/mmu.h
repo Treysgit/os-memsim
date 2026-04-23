@@ -32,6 +32,10 @@ public:
     uint32_t createProcess();
     void addVariableToProcess(uint32_t pid, std::string var_name, DataType type, uint32_t size, uint32_t address);
     void print();
+
+    //added helpers
+    Process* getProcess(uint32_t pid); //return process of pid
+    uint32_t getMaxVirtual(); //return upper bound of virtual memory a process can use
 };
 
 #endif // __MMU_H_

@@ -22,7 +22,7 @@ uint32_t Mmu::createProcess()
     var->name = "<FREE_SPACE>"; 
     var->type = DataType::FreeSpace; // label free space for future allocations
     var->virtual_address = 0; // first VA is address 0
-    var->size = _max_size; // most memory the process can allocate
+    var->size = _max_size; // hard upper bound of virtual memory the process can allocate
     proc->variables.push_back(var); //attach to process
 
     _processes.push_back(proc); // put new process in vector of processes
@@ -34,15 +34,15 @@ uint32_t Mmu::createProcess()
 
 void Mmu::addVariableToProcess(uint32_t pid, std::string var_name, DataType type, uint32_t size, uint32_t address)
 {
-    int i;
-    Process *proc = NULL;
-    std::vector<Process*>::iterator it = std::find_if(_processes.begin(), _processes.end(), [pid](Process* p)
-    { 
-        return p != nullptr && p->pid == pid; 
-    });
+    std::vector<Process*>::iterator it = std::find_if(
+        _processes.begin(), // start of vector
+        _processes.end(), // end of vector
+        [pid](Process* p) { return p != NULL && p->pid == pid; }); //use pid as capture list to find process
 
-    if (proc != NULL)
+    if (it != _processes.end())
     {
+        Process *proc = *it; // store process being assigned variable
+
         Variable *var = new Variable();
         var->name = var_name;
         var->type = type;
@@ -66,3 +66,25 @@ void Mmu::print()
         }
     }
 }
+Process* Mmu::getProcess(uint32_t pid)
+{
+    std::vector<Process*>::iterator it = std::find_if(
+        _processes.begin(), //start of vector
+        _processes.end(),  //end of vector
+        [pid](Process* p){  return p != NULL && p->pid == pid; }); //use pid as capture list to find process
+
+    if (it != _processes.end())
+    {
+        Process *proc = *it; // store process of pid
+    }
+
+    return NULL; // process of pid not found
+
+}
+
+uint32_t Mmu::getMaxVirtual()
+{
+    return _max_size;
+}
+
+

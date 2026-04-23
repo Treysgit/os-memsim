@@ -70,3 +70,9 @@ void PageTable::print()
         // TODO: print all pages
     }
 }
+
+int PageTable::getPageSize()
+{
+    return _page_size;
+}
+
