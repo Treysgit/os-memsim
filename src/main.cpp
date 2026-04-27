@@ -1,4 +1,4 @@
-// Harrison's compile command: g++ -std=c++14 -Iinclude -o bin/memsim src/*.cpp
+// Harrison's compile command: g++ -std=c++17 -Iinclude -o bin/memsim src/*.cpp
 // Harrison's run command: ./bin/memsim 4096
 
 #include <iostream>
