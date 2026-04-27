@@ -12,6 +12,7 @@ typedef struct Variable {
     DataType type;
     uint32_t virtual_address;
     uint32_t size;
+    std::vector<std::string> values;
 } Variable;
 
 typedef struct Process {
@@ -33,9 +34,13 @@ public:
     void addVariableToProcess(uint32_t pid, std::string var_name, DataType type, uint32_t size, uint32_t address);
     void print();
 
-    //added helpers
-    Process* getProcess(uint32_t pid); //return process of pid
-    uint32_t getMaxVirtual(); //return upper bound of virtual memory a process can use
+    Process* getProcess(uint32_t pid);
+    Variable* getVariable(uint32_t pid, std::string var_name);
+    bool variableExists(uint32_t pid, std::string var_name);
+    bool removeVariableFromProcess(uint32_t pid, std::string var_name);
+    bool removeProcess(uint32_t pid);
+    void printProcesses();
+    uint32_t getMaxVirtual();
 };
 
 #endif // __MMU_H_

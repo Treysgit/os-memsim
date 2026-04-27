@@ -1,9 +1,13 @@
 #include <algorithm>
+#include <iomanip>
 #include "pagetable.h"
+
+#define PHYSICAL_MEMORY 67108864
 
 PageTable::PageTable(int page_size)
 {
     _page_size = page_size;
+    _max_frames = PHYSICAL_MEMORY / page_size;
 }
 
 PageTable::~PageTable()
@@ -25,32 +29,81 @@ std::vector<std::string> PageTable::sortedKeys()
     return keys;
 }
 
-void PageTable::addEntry(uint32_t pid, int page_number)
+bool PageTable::frameIsUsed(int frame)
 {
-    // Combination of pid and page number act as the key to look up frame number
+    std::map<std::string, int>::iterator it;
+    for (it = _table.begin(); it != _table.end(); it++)
+    {
+        if (it->second == frame)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool PageTable::addEntry(uint32_t pid, int page_number)
+{
     std::string entry = std::to_string(pid) + "|" + std::to_string(page_number);
 
-    int frame = 0; 
-    // Find free frame
-    // TODO: implement this!
-    _table[entry] = frame;
+    if (_table.count(entry) > 0)
+    {
+        return true;
+    }
+
+    for (int frame = 0; frame < _max_frames; frame++)
+    {
+        if (!frameIsUsed(frame))
+        {
+            _table[entry] = frame;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void PageTable::removeEntry(uint32_t pid, int page_number)
+{
+    std::string entry = std::to_string(pid) + "|" + std::to_string(page_number);
+    _table.erase(entry);
+}
+
+void PageTable::removeProcess(uint32_t pid)
+{
+    std::vector<std::string> keys_to_delete;
+
+    std::map<std::string, int>::iterator it;
+    for (it = _table.begin(); it != _table.end(); it++)
+    {
+        size_t sep = it->first.find("|");
+        uint32_t entry_pid = std::stoi(it->first.substr(0, sep));
+
+        if (entry_pid == pid)
+        {
+            keys_to_delete.push_back(it->first);
+        }
+    }
+
+    for (int i = 0; i < keys_to_delete.size(); i++)
+    {
+        _table.erase(keys_to_delete[i]);
+    }
 }
 
 int PageTable::getPhysicalAddress(uint32_t pid, uint32_t virtual_address)
 {
-    // Convert virtual address to page_number and page_offset
-    // TODO: implement this!
-    int page_number = 0;
-    int page_offset = 0;
+    int page_number = virtual_address / _page_size;
+    int page_offset = virtual_address % _page_size;
 
-    // Combination of pid and page number act as the key to look up frame number
     std::string entry = std::to_string(pid) + "|" + std::to_string(page_number);
-    
-    // If entry exists, look up frame number and convert virtual to physical address
+
     int address = -1;
     if (_table.count(entry) > 0)
     {
-        // TODO: implement this!
+        int frame_number = _table[entry];
+        address = frame_number * _page_size + page_offset;
     }
 
     return address;
@@ -58,16 +111,21 @@ int PageTable::getPhysicalAddress(uint32_t pid, uint32_t virtual_address)
 
 void PageTable::print()
 {
-    int i;
-
     std::cout << " PID  | Page Number | Frame Number" << std::endl;
     std::cout << "------+-------------+--------------" << std::endl;
 
     std::vector<std::string> keys = sortedKeys();
 
-    for (i = 0; i < keys.size(); i++)
+    for (int i = 0; i < keys.size(); i++)
     {
-        // TODO: print all pages
+        size_t sep = keys[i].find("|");
+        uint32_t pid = std::stoi(keys[i].substr(0, sep));
+        int page_number = std::stoi(keys[i].substr(sep + 1));
+        int frame_number = _table[keys[i]];
+
+        std::cout << std::setw(5) << pid << " | "
+                  << std::setw(11) << page_number << " | "
+                  << std::setw(12) << frame_number << std::endl;
     }
 }
 
@@ -75,4 +133,3 @@ int PageTable::getPageSize()
 {
     return _page_size;
 }
-
