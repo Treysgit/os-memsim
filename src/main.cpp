@@ -482,7 +482,26 @@ void freeVariable(uint32_t pid, std::string var_name, Mmu *mmu, PageTable *page_
 
         if(!page_has_variable)
         {
+            // u_int32_t physical_address = page_table->getPhysicalAddress(pid, page * page_size);
+
+            // if (physical_address != -1) {
+            //     u_int32_t frame = physical_address / page_size;
+            // }
             page_table->removeEntry(pid, page);
+            
+        }
+
+        for (int i = 0; i < (int)process->variables.size() - 1; i++) {
+            if (process->variables[i]->type == DataType::FreeSpace && 
+                process->variables[i+1]->type == DataType::FreeSpace) {
+                
+                process->variables[i]->size += process->variables[i+1]->size;
+                
+                delete process->variables[i+1];
+                process->variables.erase(process->variables.begin() + i + 1);
+            
+                i--; 
+            }
         }
     }
 }
