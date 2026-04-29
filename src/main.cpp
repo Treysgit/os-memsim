@@ -36,6 +36,12 @@ int main(int argc, char **argv)
 
     // Print opening instuction message
     int page_size = std::stoi(argv[1]);
+    if(page_size < 1024 || page_size > 32768 || (page_size & (page_size - 1)) != 0)
+    {
+	std::cout << "error: invalid page size" << std::endl;
+	return 1;
+    }
+
     printStartMessage(page_size);
 
     // Create physical 'memory' (raw array of bytes)
@@ -310,34 +316,7 @@ void allocateVariable(uint32_t pid, std::string var_name, DataType type, uint32_
     uint32_t new_addr = 0; //initial address
     int hole_found = 0;
 
-    // //first-fit (see if any deallocated spaces are big enough)
-    // for(int i = 0 ; i < process->variables.size() ; i++)
-    // {
-    //     if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->size >= var_alloc){
-    //         new_addr = process->variables[i]->virtual_address; // assign address of free space
-    //         mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
-    //         process->variables[i]->virtual_address += var_alloc; //move free space virtual address forward
-    //         process->variables[i]->size -= var_alloc; // decrease size of free space
-
-    //         hole_found = 1;
-    //         break;
-
-    //     }
-    // }
-    //first-fit (see if any deallocated variable spaces are big enough)
-    // for(int i = 0 ; i < process->variables.size() ; i++)
-    // {
-    //     if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->size >= var_alloc){
-    //         new_addr = process->variables[i]->virtual_address; // assign address of free space
-    //         mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
-    //         process->variables[i]->virtual_address += var_alloc; //move free space virtual address forward
-    //         process->variables[i]->size -= var_alloc; // decrease size of free space
-
-    //         hole_found = 1;
-    //         break;
-
-    //     }
-    // }
+    
 
     
     // first-fit within already allocated pages
