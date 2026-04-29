@@ -29,12 +29,13 @@ private:
     std::map<std::string, int> _table;
 
     std::vector<std::string> sortedKeys();
-    bool frameIsUsed(int frame);
+    
 
 public:
     PageTable(int page_size);
     ~PageTable();
 
+    bool frameIsUsed(int frame);
     bool addEntry(uint32_t pid, int page_number);
     void removeEntry(uint32_t pid, int page_number);
     void removeProcess(uint32_t pid);

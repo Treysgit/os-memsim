@@ -310,83 +310,193 @@ void allocateVariable(uint32_t pid, std::string var_name, DataType type, uint32_
     uint32_t new_addr = 0; //initial address
     int hole_found = 0;
 
-    //first-fit (see if any deallocated spaces are big enough)
-    for(int i = 0 ; i < process->variables.size() ; i++)
+    // //first-fit (see if any deallocated spaces are big enough)
+    // for(int i = 0 ; i < process->variables.size() ; i++)
+    // {
+    //     if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->size >= var_alloc){
+    //         new_addr = process->variables[i]->virtual_address; // assign address of free space
+    //         mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
+    //         process->variables[i]->virtual_address += var_alloc; //move free space virtual address forward
+    //         process->variables[i]->size -= var_alloc; // decrease size of free space
+
+    //         hole_found = 1;
+    //         break;
+
+    //     }
+    // }
+    //first-fit (see if any deallocated variable spaces are big enough)
+    // for(int i = 0 ; i < process->variables.size() ; i++)
+    // {
+    //     if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->size >= var_alloc){
+    //         new_addr = process->variables[i]->virtual_address; // assign address of free space
+    //         mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
+    //         process->variables[i]->virtual_address += var_alloc; //move free space virtual address forward
+    //         process->variables[i]->size -= var_alloc; // decrease size of free space
+
+    //         hole_found = 1;
+    //         break;
+
+    //     }
+    // }
+
+    
+    // first-fit within already allocated pages
+    for(int i = 0; i < process->variables.size(); i++)
     {
-        if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->size >= var_alloc){
-            new_addr = process->variables[i]->virtual_address; // assign address of free space
-            mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
-            process->variables[i]->virtual_address += var_alloc; //move free space virtual address forward
-            process->variables[i]->size -= var_alloc; // decrease size of free space
-
-            hole_found = 1;
-            break;
-
-        }
-    }
-    uint32_t end = 0; //address of the end point of the last variable in VA space
-    //allocate new pages if hole not found
-    if(!hole_found)
-    {
-
-        //loop through each variable, skipping FreeSpace holes. Largest VA + size is the end point.
-        for(int i = 0 ; i < process->variables.size() ; i++ )
+        //1st condition, check if variable is a hole
+        if(process->variables[i]->type == DataType::FreeSpace)
         {
-            if(process->variables[i]->type != DataType::FreeSpace)
-            {
-                uint32_t end_guess = process->variables[i]->virtual_address + process->variables[i]->size;
+            uint32_t var_hole_start = process->variables[i]->virtual_address; //variable hole start va
+            uint32_t var_hole_end = var_hole_start + process->variables[i]->size; //end va
 
-                if(end_guess > end)
+            uint32_t page_size = page_table->getPageSize();
+
+            uint32_t start_page_num = var_hole_start / page_size; //page number of first page in hole
+            uint32_t last_page_num = (var_hole_end - 1) / page_size;//va of last page in hole, truncation division
+
+            //loop through all pages allocated, and look for non-used space in a page
+            //find first page with page hole big enough 
+            for(uint32_t page_i = start_page_num; page_i <= last_page_num; page_i++)
+            {
+                uint32_t page_start = page_i * page_size; //va of first byte in page
+                uint32_t page_end = page_start + page_size; //va of last byte in page
+
+                //make sure to use only the part of the start/end page belonging to this FREE_SPACE variable
+                uint32_t usable_start = std::max(var_hole_start, page_start); 
+                uint32_t usable_end = std::min(var_hole_end, page_end);
+
+                // skip if page space not yet allocated a physical address
+                // returns < 0 if not
+                if(page_table->getPhysicalAddress(pid, page_start) < 0)
                 {
-                    end = end_guess;
+                    continue;
                 }
-            }
+                if(usable_start != var_hole_start){
+                    continue; 
+                }
 
-
-        }
-        //allocate enough new pages for new variable allocation
-        uint32_t page_size = page_table->getPageSize();
-        uint32_t total_pages = (var_alloc + page_size - 1) / page_size; // get total new pages for process, round up division
-        uint32_t end_page = end / page_size; //get the end page to append new pages to
-
-        // loop addEntry() to allocate new pages to process, starting at end page
-        for(int i = 0 ; i < total_pages ; i++)
-        {
-            if(!page_table->addEntry(pid, end_page + i))
-            {
-                std::cout << "error: allocation exceeds system memory" << std::endl;
-                return;
-            }
-        }
-
-        //update variables virtual address to where we started allocation
-        new_addr = end;
-
-        //put actual variable in process
-        mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
-
-        //update free space area
-        for(int i = 0 ; i < process->variables.size() ; i++)
-            {
-                if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->virtual_address == end)
+                //found first hole in a page big enough
+                if(usable_end - usable_start >= var_alloc)
                 {
-                    //change start index of free space area to the end of variable allocation. 
-                    process->variables[i]->virtual_address += var_alloc;
-                    process->variables[i]->size -= var_alloc; //decrememnt memory left in RAM
+                    
+                    new_addr = usable_start; //get VA of start of page hole
+                    uint32_t alloc_end = new_addr + var_alloc; //get va to update FREE_SPACE this page is in
+
+                    // case 1: whole hole in page used
+                    if(new_addr == var_hole_start && alloc_end == var_hole_end)
+                    {
+                        delete process->variables[i];
+                        process->variables.erase(process->variables.begin() + i); //removes variable in processusing iterator at beginning index
+                    }
+                    // case 2: part of head page of FREE_SPACE used
+                    else if(new_addr == var_hole_start)
+                    {
+                        process->variables[i]->virtual_address = alloc_end; //update FREE_SPACE va
+                        process->variables[i]->size = var_hole_end - alloc_end; //update size left of FREE_SPACE
+                    }
+                    // case 3: used up entire end page hole
+                    else if(alloc_end == var_hole_end)
+                    {
+                        process->variables[i]->size = new_addr - var_hole_start; //update FREE_SPACE size
+                    }
+                    
+
+                    mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
+
+                    hole_found = 1;
                     break;
                 }
             }
-        
+        }
     
+
+        if(hole_found)
+        {
+            break;
+        }
     }
+
+
+
+
+    uint32_t end = 0; //address of the end point of the last variable in VA space
+    //allocate new pages if hole not found
+     if(!hole_found)
+        {
+            for(int i = 0 ; i < process->variables.size() ; i++ )
+            {
+                if(process->variables[i]->type != DataType::FreeSpace)
+                {
+                    uint32_t end_guess = process->variables[i]->virtual_address + process->variables[i]->size;
+
+                    if(end_guess > end)
+                    {
+                        end = end_guess;
+                    }
+                }
+            }
+
+            uint32_t page_size = page_table->getPageSize();
+
+            uint32_t first_page = end / page_size; //convert starting address into a page number
+            uint32_t last_page = (end + var_alloc - 1) / page_size; //last page the variable will touch
+
+            int pages_needed = 0; 
+            // get pages needed
+            for(uint32_t page = first_page; page <= last_page; page++) 
+            {
+                if(page_table->getPhysicalAddress(pid, page * page_size) < 0) 
+                {
+                    pages_needed++; 
+                }
+            }
+
+            int frames_free = 0; 
+            for(int i = 0; i < PHYSICAL_MEMORY / page_table->getPageSize(); i++) 
+            {
+                if(!page_table->frameIsUsed(i))
+                {
+                    frames_free++;
+                }
+            }
+
+            if(frames_free < pages_needed) 
+            {
+                std::cout << "error: allocation exceeds system memory" << std::endl; 
+                return; 
+            }
+
+            for(uint32_t page = first_page; page <= last_page; page++) 
+            {
+                if(!page_table->addEntry(pid, page)) 
+                {
+                    std::cout << "error: allocation exceeds system memory" << std::endl; 
+                    return; 
+                }
+            }
+
+        new_addr = end;
+
+        mmu->addVariableToProcess(pid, var_name, type, var_alloc, new_addr);
+
+        for(int i = 0 ; i < process->variables.size() ; i++)
+        {
+            if(process->variables[i]->type == DataType::FreeSpace && process->variables[i]->virtual_address == end)
+            {
+                process->variables[i]->virtual_address += var_alloc;
+                process->variables[i]->size -= var_alloc;
+                break;
+            }
+        }
+    }
+
     std::cout << new_addr << std::endl;
-
-
-
-
-
-
 }
+
+
+
+
+
 
 void setVariable(uint32_t pid, std::string var_name, uint32_t offset, std::vector<std::string> values, Mmu *mmu, PageTable *page_table, uint8_t *memory)
 {
